@@ -44,9 +44,10 @@ let capsEntries = entries.map((entry) => [entry[0][0].toUpperCase() + entry[0].s
 sequelize.models = Object.fromEntries(capsEntries);
 const { Person, Movie } = sequelize.models;
 
-Person.belongsToMany(Movie, { through: 'person_movie', timestamps: false });
-Movie.belongsToMany(Person, { through: 'person_movie', timestamps: false });
+Person.belongsToMany(Movie, { through: "person_movies", timestamps: false });
+Movie.belongsToMany(Person, { through: "person_movies", timestamps: false });
 
 module.exports = {
-    ...sequelize.models
+    ...sequelize.models,
+    sequelize
 }
