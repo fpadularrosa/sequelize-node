@@ -12,19 +12,29 @@ const fetchPersons = async (name) => {
 };
 
 const fetchMovie = async (title) => {
-    return await(await fetch(moviesAPI + title)).json()
+    const dataMovie = await(await fetch(moviesAPI + title)).json()
+    dataMovie.Response === 'False' && null;
+    return dataMovie;
 };
 
 module.exports = {
     getDataCelebritie: async (nameCelebritie) => {
-        const person = await fetchPersons(nameCelebritie.toLowerCase());
-        if(person){
-            const [objectPerson] = person;
-            const { age, name } = objectPerson;
-            const [firstName, lastName] = name.split(' ');
-    
-            return { age, firstName, lastName, data: person };
-        } else throw Error
+        try {
+            const person = await fetchPersons(nameCelebritie.toLowerCase());
+            if(person.length){
+                const { age, name } = person[0];
+                const [firstName, lastName] = name.split(' ');
+                const data = { 
+                    age, 
+                    firstName, 
+                    lastName
+                };
+
+                return data;
+            } else return null;
+        } catch (error) {
+            console.error(error)
+        }
     },
     fetchPersons,
     fetchMovie

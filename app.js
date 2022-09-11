@@ -17,7 +17,9 @@ app.listen(port, () => {
     console.log('Listening on port 3000');
 });
 
-// sequelize.sync({ force: false })
-//   .then(() => {
-//     console.log('DB synced');
-// });
+ (async () => {
+  await sequelize.sync({ force: false })
+  .then(() => {
+    console.log('DB synced');
+  }
+ )})();

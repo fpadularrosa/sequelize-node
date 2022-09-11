@@ -1,86 +1,124 @@
-const { Person, Movie } = require('../db');
+const { Persons, Movies, Roles } = require('../db');
 const { getDataCelebritie, fetchMovie } = require('../utils/fetch');
 require('dotenv').config();
+
+const createRolesTable = (async () => {
+    await Roles.findOrCreate({where: { roleName: 'actor' }});
+    await Roles.findOrCreate({where: { roleName: 'director' }});
+    await Roles.findOrCreate({where: { roleName: 'producer' }});
+})();
 
 module.exports = {
     getPerson : async (req, res) => {
         const { fullname, asActor, asDirector, asProducer } = req.body;
         const { firstName, lastName, age } = await getDataCelebritie(fullname);
+        
+        let [orderedPerson, created] = await Persons.findOrCreate({ where: { name: firstName, lastName, age } });
 
-        let newPerson = await Person.create({ name: firstName, lastName, age });
+        if (asActor.length >= 1) asActor.map( async movieAsActor => {
+            const data = await fetchMovie(movieAsActor);
+            if(data !== null){
+                const { Title:title, Year:year } = data;
 
-        let moviesActingId = [];
-        const dbMoviesActing = asActor?.length ? await asActor.map( async movieAsActor => {
-            const { Title, Year } = await fetchMovie(movieAsActor);
+            return Movies.findOrCreate({ where: { title, year } })
+                .then(async([movieAsActor, created]) => { 
+                    const { id: movie_id } = movieAsActor.dataValues;
+                    await orderedPerson.addMovie(movie_id, { through: { roleId: 1 } });
+                })
+            }
+        });
 
-            return Movie.findOrCreate({ where: { title: Title, year: Year } })
-                .then(([movieAsActor, created]) => moviesActingId = [...moviesActingId, movieAsActor.movieId])
-        } ): null;
+        if (asDirector.length >= 1) asDirector.map( async movieAsDirector => {
+            const data = await fetchMovie(movieAsDirector);
+            if(data !== null){
+                const { Title: title, Year: year } = data;
 
-        let moviesManagingId = [];
-        const dbMoviesManaging = await asDirector.map( async movieAsDirector => {
-            const { title, year } = await fetchMovie(movieAsDirector);
-            return Movie.findOrCreate({ where: { title, year } })
-                .then(([movieAsDirector, created]) => moviesManagingId = [...moviesManagingId, movieAsDirector.movieId])
-        } );
+                return Movies.findOrCreate({ where: { title, year } })
+                .then(async ([movieAsDirector, created]) => {
+                    const { id: movie_id } = movieAsDirector.dataValues;
+                    await orderedPerson.addMovie(movie_id, { through: { roleId: 2 } });
+                })
+            }
+        }); 
 
-        let moviesProducingId = [];
-        const dbMoviesProducing = await asProducer.map( async movieAsProducer => {
-            const { title, year } = await fetchMovie(movieAsProducer);
-            return Movie.findOrCreate({ where: { title, year } })
-                .then(([movieAsProducer, created]) => moviesProducingId = [...moviesProducingId, movieAsProducer.movieId])
-        } );
+        if (asProducer.length >= 1) asProducer.map( async movieAsProducer => {
+            const data = await fetchMovie(movieAsProducer);
+            if(data !== null){
+                const { Title: title, Year: year } = data;
 
-        // const arrayPromisesDatabase = [...dbMoviesActing];
-        // await Promise.all(arrayPromisesDatabase);
-        // await newPerson.addMovies(moviesActingId);
-        // await newPerson.addDirectors(moviesManagingId);
-        // await newPerson.addProducers(moviesProducingId);
+                return Movies.findOrCreate({ where: { title, year } })
+                .then(async([movieAsProducer, created]) => {
+                    const { id: movie_id } = movieAsProducer.dataValues;
+                    await orderedPerson.addMovie(movie_id, { through: { roleId: 3 } });
+                });
+            }
+        });
 
-        // await newPerson.save();
-        newPerson && res.json(newPerson);
+        orderedPerson && res.json(orderedPerson);
     },
     getMovie: async (req, res) => {
         const { title } = req.query;
-        const { Year, Actors, Writer, Director } = await fetchMovie(title);
-        const newMovie = await Movie.findOrCreate({ where: { title, year: Year } });
+        const { Year: year, Actors, Writer, Director } = await fetchMovie(title);
+        const [orderedMovie, created] = await Movies.findOrCreate({ where: { title, year } });
 
+        const directors = Director.split(', ').length > 1 ? Director.split(', ') : Director;
         const actors = Actors.split(', ');
-        const director = Director;
-        const producer = Writer.split(', ') ? Writer.split(', ')[0] : Writer;
+        const producer = Writer.split(', ')[0];
 
-        let castingId = [];
-        const dbCasting = await actors.map( async actor => {
-            const { firstName, lastName, age } = await getDataCelebritie(actor);
-            return Person.findOrCreate({ 
-                where: { name: firstName, lastName, age }
-            }).then(([actor, created]) => castingId = [...castingId, actor.personId])
-        } );
+        actors?.map( async actor => {
+            const data = await getDataCelebritie(actor);
+            if(data !== null){
+                const { age, firstName, lastName } = data;
 
-        let directorsId = [];
-        const dbDirectors = (async directorName => {
-            const { firstName, lastName, age } = await getDataCelebritie(directorName);
-                return Person.findOrCreate({ 
-                    where: { name: firstName, lastName, age },
-                    default: { name: firstName, lastName, age }
-                }).then(([director, created]) => directorsId = [...directorsId, director.personId])
-        })(director);
+                return Persons.findOrCreate({ where: { name: firstName, lastName, age }})
+                .then(async ([actor, created]) => {
+                    const { id:person_id } = actor.dataValues;
+                    await orderedMovie.addPerson(person_id, { through: { roleId: 1 } });
+                })
+            };
+            return;
+        });
 
-        let producersId = [];
-        const dbProducers = (async producer =>{
-            const { firstName, lastName, age } = await getDataCelebritie(producer);
-            return Person.findOrCreate({ 
-                where: { name: firstName, lastName, age },
-                default: { name: firstName, lastName, age } 
-            }).then(([producer, created]) => producersId = [...producersId, producer.personId])
+        typeof directors === 'string' ? (async director => {
+                const data = await getDataCelebritie(director);
+                if(data !== null) {
+                    const { age, firstName, lastName } = data;
+
+                    return await Persons.findOrCreate({ 
+                        where: { name: firstName, lastName, age }
+                    }).then(async ([director, created]) => {
+                        const { id } = director.dataValues;
+                        await orderedMovie.addPerson(id, { through: { roleId: 2 } });
+                    });
+                } else return null;
+            })(directors) : directors.map( async directorName => {
+                const data = await getDataCelebritie(directorName);
+                if(data !== null) {
+                    const { age, firstName, lastName } = data;
+                    return await Persons.findOrCreate({ 
+                        where: { name: firstName, lastName, age }
+                    }).then(async ([director, created]) => {
+                        const { id } = director.dataValues;
+                        await orderedMovie.addPerson(id, { through: { roleId: 2 } });
+                    });
+                }
+                return;
+            } );
+
+        (async producer => {
+            const data = await getDataCelebritie(producer);
+            if(data !== null){
+                const { age, firstName, lastName } = data;
+                return Persons.findOrCreate({ 
+                    where: { name: firstName, lastName, age }
+                }).then(async ([producer, created]) => {
+                    const { id } = producer.dataValues;
+                    await orderedMovie.addPerson(id, { through: { roleId: 3 } })
+                });
+            }
+            return null;
         })(producer);
-
-        const arrayPromisesDatabase = [...dbCasting];
-        //await Promise.all(arrayPromisesDatabase);
-        //await newMovie.addPerson([...dbCasting]);
-        //await newMovie.addPerson(directorsId);
-        // await newMovie.addProducer(producersId);
-
-        newMovie && res.json(newMovie);
+        
+        orderedMovie && res.json(orderedMovie);
     }
 }

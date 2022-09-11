@@ -1,6 +1,6 @@
 require('dotenv').config();
 const fs = require('fs');
-const { Sequelize } = require('sequelize');
+const { Sequelize, DataTypes } = require('sequelize');
 const path = require('path');
 const mysql = require('mysql2')
 
@@ -42,12 +42,34 @@ modelDefiners.forEach(model => model(sequelize));
 let entries = Object.entries(sequelize.models);
 let capsEntries = entries.map((entry) => [entry[0][0].toUpperCase() + entry[0].slice(1), entry[1]]);
 sequelize.models = Object.fromEntries(capsEntries);
-const { Person, Movie } = sequelize.models;
+const { Persons, Movies } = sequelize.models;
 
-Person.belongsToMany(Movie, { through: "person_movies", timestamps: false });
-Movie.belongsToMany(Person, { through: "person_movies", timestamps: false });
+const persons_movies = sequelize.define('persons_movies',
+{
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        allowNull: false,
+        autoIncrement: true
+    },
+    roleId: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        allowNull: false,
+        references: {
+            'model': 'Roles',
+            'key': 'id'
+        }
+    },
+},
+{
+    timestamps: false
+});
+
+Persons.belongsToMany(Movies, { through: persons_movies, foreignKey: "person_id", otherKey: 'movie_id', timestamps: false });
+Movies.belongsToMany(Persons, { through: persons_movies, foreignKey: "movie_id", otherKey: 'person_id', timestamps: false });
 
 module.exports = {
     ...sequelize.models,
-    sequelize
+    sequelize,
 }
